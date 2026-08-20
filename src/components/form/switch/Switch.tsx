@@ -6,6 +6,7 @@ interface SwitchProps {
   disabled?: boolean;
   onChange?: (checked: boolean) => void;
   color?: "blue" | "gray"; // Added prop to toggle color theme
+  ariaLabel?: string;
 }
 
 const Switch: React.FC<SwitchProps> = ({
@@ -14,6 +15,7 @@ const Switch: React.FC<SwitchProps> = ({
   disabled = false,
   onChange,
   color = "blue", // Default to blue color
+  ariaLabel,
 }) => {
   const [isChecked, setIsChecked] = useState(defaultChecked);
 
@@ -46,11 +48,16 @@ const Switch: React.FC<SwitchProps> = ({
         };
 
   return (
-    <label
-      className={`flex cursor-pointer select-none items-center gap-3 text-sm font-medium ${
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isChecked}
+      aria-label={ariaLabel ?? label}
+      disabled={disabled}
+      className={`flex select-none items-center gap-3 text-sm font-medium ${
         disabled ? "text-gray-400" : "text-gray-700 dark:text-gray-400"
       }`}
-      onClick={handleToggle} // Toggle when the label itself is clicked
+      onClick={handleToggle}
     >
       <div className="relative">
         <div
@@ -65,7 +72,7 @@ const Switch: React.FC<SwitchProps> = ({
         ></div>
       </div>
       {label}
-    </label>
+    </button>
   );
 };
 

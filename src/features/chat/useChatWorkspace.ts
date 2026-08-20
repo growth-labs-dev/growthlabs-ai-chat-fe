@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { chatApi, streamChat } from "./chatApi";
 import { demoAttachment, demoCreateConversation, demoCreateFolder, readDemoState, writeDemoState } from "./demoChat";
-import type { ChatAttachment, ChatFolder, ChatMessage, ConversationSummary, GrowthModel } from "./types";
+import type { ChatAttachment, ChatFolder, ChatMessage, ConversationSummary, GrowthModel, WorkspaceCapabilities } from "./types";
 
 const modelLabels: Record<GrowthModel, string> = {
   "growth-low": "Growth Low",
@@ -20,6 +20,10 @@ export function useChatWorkspace() {
   const [loading, setLoading] = useState(true);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [capabilities, setCapabilities] = useState<WorkspaceCapabilities>({
+    uploads: { available: false, reason: "O backend não anunciou processamento seguro de ficheiros." },
+    browserTools: { available: false, reason: "O backend não anunciou ferramentas de internet." },
+  });
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -32,6 +36,10 @@ export function useChatWorkspace() {
         if (!active) return;
         setFolders(workspace.folders);
         setConversations(workspace.conversations);
+        setCapabilities(workspace.capabilities ?? {
+          uploads: { available: false, reason: "O backend não anunciou processamento seguro de ficheiros." },
+          browserTools: { available: false, reason: "O backend não anunciou ferramentas de internet." },
+        });
         const first = workspace.conversations[0];
         if (first) {
           setSelectedId(first.id);
@@ -245,6 +253,7 @@ export function useChatWorkspace() {
     loading,
     streaming,
     error,
+    capabilities,
     setModel,
     setError,
     selectConversation,

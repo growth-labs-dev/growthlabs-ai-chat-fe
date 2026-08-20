@@ -4,13 +4,14 @@ import { ReactComponent as PlusIcon } from "../../../icons/plus.svg?react";
 import { ReactComponent as CloseIcon } from "../../../icons/close.svg?react";
 import { ReactComponent as PaperPlaneIcon } from "../../../icons/paper-plane.svg?react";
 import { ReactComponent as FileIcon } from "../../../icons/file.svg?react";
-import type { ChatAttachment, GrowthModel } from "../types";
+import type { CapabilityStatus, ChatAttachment, GrowthModel } from "../types";
 
 interface ChatComposerProps {
   model: GrowthModel;
   modelLabels: Record<GrowthModel, string>;
   streaming: boolean;
   disabled?: boolean;
+  uploadCapability?: CapabilityStatus;
   onModelChange: (model: GrowthModel) => void;
   onUpload: (file: File) => Promise<ChatAttachment>;
   onSend: (content: string, attachments: ChatAttachment[]) => Promise<void>;
@@ -26,6 +27,7 @@ export function ChatComposer(props: ChatComposerProps) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const uploadsAvailable = props.uploadCapability?.available === true;
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -93,7 +95,7 @@ export function ChatComposer(props: ChatComposerProps) {
           />
           <div className="flex items-center gap-2 px-1 pb-1">
             <input ref={fileRef} type="file" multiple className="sr-only" onChange={handleFiles} />
-            <button type="button" aria-label="Anexar ficheiros" disabled={uploading || props.streaming} onClick={() => fileRef.current?.click()} className="grid size-9 place-items-center rounded-full border border-gray-700 text-gray-400 transition hover:bg-gray-800 hover:text-white disabled:opacity-50"><PlusIcon className="size-4" /></button>
+            <button type="button" aria-label="Anexar ficheiros" aria-describedby={!uploadsAvailable ? "upload-capability" : undefined} disabled={!uploadsAvailable || uploading || props.streaming} onClick={() => fileRef.current?.click()} className="grid size-9 place-items-center rounded-full border border-gray-700 text-gray-400 transition hover:bg-gray-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"><PlusIcon className="size-4" /></button>
             <select value={props.model} onChange={(event) => props.onModelChange(event.target.value as GrowthModel)} disabled={props.streaming} aria-label="Modelo Growth" className="h-9 rounded-full border border-gray-700 bg-gray-900 px-3 text-xs font-medium text-gray-300 outline-none hover:bg-gray-800 focus:border-brand-500 disabled:opacity-50">
               {(Object.entries(props.modelLabels) as Array<[GrowthModel, string]>).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
@@ -106,9 +108,9 @@ export function ChatComposer(props: ChatComposerProps) {
           </div>
         </div>
         {uploadError ? <p role="alert" className="mt-2 px-3 text-xs text-error-400">{uploadError}</p> : null}
+        {!uploadsAvailable ? <p id="upload-capability" className="mt-2 px-3 text-center text-theme-xs text-gray-500">Ficheiros indisponíveis neste ambiente — {props.uploadCapability?.reason ?? "processamento seguro não configurado"}</p> : null}
         <p className="mt-2 text-center text-theme-xs text-gray-600">As respostas podem conter erros. Confirme decisões importantes.</p>
       </div>
     </div>
   );
 }
-

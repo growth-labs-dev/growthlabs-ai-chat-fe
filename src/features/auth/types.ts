@@ -16,7 +16,7 @@ export interface AuthSession {
 
 export interface AuthConfig {
   authentication: boolean;
-  registration: false;
+  password: { enabled: boolean; registration: boolean };
   google: { enabled: boolean; loginUrl: string | null };
   cli: { enabled: boolean; verificationUrl: string };
 }

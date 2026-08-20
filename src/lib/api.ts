@@ -22,10 +22,35 @@ const readResponseBody = async (response: Response) => {
   return text || undefined;
 };
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+interface ApiRequestOptions {
+  /**
+   * Login and registration are the only browser mutations that can run before
+   * a session (and therefore a CSRF token) exists. The API still enforces
+   * same-origin requests. Each option is endpoint-specific so a caller cannot
+   * accidentally weaken another mutation.
+   */
+  csrf?: "required" | "unauthenticated-password-login" | "unauthenticated-password-register";
+}
+
+export async function apiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+  options: ApiRequestOptions = {},
+): Promise<T> {
   const headers = new Headers(init.headers);
   const method = (init.method ?? "GET").toUpperCase();
-  if (!new Set(["GET", "HEAD", "OPTIONS"]).has(method)) {
+  const isMutation = !new Set(["GET", "HEAD", "OPTIONS"]).has(method);
+  const isPasswordLogin = options.csrf === "unauthenticated-password-login";
+  const isPasswordRegistration = options.csrf === "unauthenticated-password-register";
+
+  if (isPasswordLogin && (method !== "POST" || path !== "/auth/password/login")) {
+    throw new ApiError("A exceção CSRF só pode ser usada no login por palavra-passe.", 500);
+  }
+  if (isPasswordRegistration && (method !== "POST" || path !== "/auth/password/register")) {
+    throw new ApiError("A exceção CSRF só pode ser usada no registo por palavra-passe.", 500);
+  }
+
+  if (isMutation && !isPasswordLogin && !isPasswordRegistration) {
     const csrfToken = getCsrfToken();
     if (!csrfToken) throw new ApiError("A sessão não possui um token CSRF válido.", 403);
     headers.set("X-Growth-CSRF", csrfToken);

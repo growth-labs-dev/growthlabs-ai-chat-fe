@@ -7,6 +7,7 @@ import Label from "../../components/form/Label";
 import Switch from "../../components/form/switch/Switch";
 import { apiRequest } from "../../lib/api";
 import type { AuthUser } from "../auth/types";
+import type { CapabilityStatus } from "../chat/types";
 
 type ResourceTab = "skills" | "plugins" | "connections" | "personalities" | "profile" | "settings";
 
@@ -44,6 +45,7 @@ interface ResourceCenterProps {
   onClose: () => void;
   user: AuthUser;
   demo: boolean;
+  browserTools?: CapabilityStatus;
 }
 
 function ResourceList({ tab, items, demo, onUpdate }: { tab: Exclude<ResourceTab, "profile" | "settings">; items: ResourceItem[]; demo: boolean; onUpdate: (item: ResourceItem) => void }) {
@@ -105,13 +107,63 @@ function ProfilePanel({ user, demo }: { user: AuthUser; demo: boolean }) {
     setSaved(true);
   };
   return (
-    <form onSubmit={submit} className="max-w-xl space-y-5">
-      <div><Label htmlFor="profile-name">Nome</Label><Input id="profile-name" value={name} onChange={(event) => { setSaved(false); setName(event.target.value); }} /></div>
-      <div><Label htmlFor="profile-email">Email</Label><Input id="profile-email" type="email" value={user.email} disabled /></div>
-      <div><Label htmlFor="profile-role">Função</Label><Input id="profile-role" value={jobTitle} placeholder="Ex.: Engenharia de software" onChange={(event) => { setSaved(false); setJobTitle(event.target.value); }} /></div>
-      <div><Label htmlFor="profile-context">Contexto de trabalho</Label><textarea id="profile-context" value={workspaceContext} onChange={(event) => { setSaved(false); setWorkspaceContext(event.target.value); }} rows={5} placeholder="Preferências, tecnologias e contexto que a IA deve considerar." className="w-full resize-y rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-gray-500 focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10" /></div>
-      <div className="flex items-center gap-3"><Button disabled={demo}>Guardar alterações</Button>{saved ? <span className="text-sm text-success-500">Perfil atualizado.</span> : null}</div>
-    </form>
+    <div className="max-w-xl space-y-9">
+      <form onSubmit={submit} className="space-y-5">
+        <div><Label htmlFor="profile-name">Nome</Label><Input id="profile-name" value={name} onChange={(event) => { setSaved(false); setName(event.target.value); }} /></div>
+        <div><Label htmlFor="profile-email">Email</Label><Input id="profile-email" type="email" value={user.email} disabled /></div>
+        <div><Label htmlFor="profile-role">Função</Label><Input id="profile-role" value={jobTitle} placeholder="Ex.: Engenharia de software" onChange={(event) => { setSaved(false); setJobTitle(event.target.value); }} /></div>
+        <div><Label htmlFor="profile-context">Contexto de trabalho</Label><textarea id="profile-context" value={workspaceContext} onChange={(event) => { setSaved(false); setWorkspaceContext(event.target.value); }} rows={5} placeholder="Preferências, tecnologias e contexto que a IA deve considerar." className="w-full resize-y rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-gray-500 focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10" /></div>
+        <div className="flex items-center gap-3"><Button disabled={demo}>Guardar alterações</Button>{saved ? <span className="text-sm text-success-500">Perfil atualizado.</span> : null}</div>
+      </form>
+      <PasswordChangePanel demo={demo} />
+    </div>
+  );
+}
+
+function PasswordChangePanel({ demo }: { demo: boolean }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+  const valid = currentPassword.length > 0 && newPassword.length >= 12 && newPassword === confirmation;
+
+  const clearFields = () => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmation("");
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (demo || !valid || submitting) return;
+    setSubmitting(true);
+    setFeedback(null);
+    try {
+      await apiRequest("/auth/password/change", {
+        method: "POST",
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      });
+      setFeedback({ kind: "success", message: "Palavra-passe atualizada com sucesso." });
+    } catch (requestError) {
+      setFeedback({ kind: "error", message: requestError instanceof Error ? requestError.message : "Não foi possível alterar a palavra-passe." });
+    } finally {
+      clearFields();
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="border-t border-gray-800 pt-8" aria-labelledby="profile-security-heading">
+      <h4 id="profile-security-heading" className="text-base font-semibold text-white">Segurança</h4>
+      <p className="mt-1 text-sm leading-5 text-gray-500">Altere a palavra-passe temporária ou atual da sua conta.</p>
+      <form onSubmit={submit} className="mt-5 space-y-4">
+        <div><Label htmlFor="current-password">Palavra-passe atual</Label><Input id="current-password" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" required disabled={demo || submitting} /></div>
+        <div><Label htmlFor="new-password">Nova palavra-passe</Label><Input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" required disabled={demo || submitting} hint="Mínimo de 12 caracteres." error={newPassword.length > 0 && newPassword.length < 12} /></div>
+        <div><Label htmlFor="confirm-new-password">Confirmar nova palavra-passe</Label><Input id="confirm-new-password" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" required disabled={demo || submitting} hint={confirmation.length > 0 && confirmation !== newPassword ? "As palavras-passe não coincidem." : undefined} error={confirmation.length > 0 && confirmation !== newPassword} /></div>
+        <div className="flex flex-wrap items-center gap-3"><Button disabled={demo || submitting || !valid}>{submitting ? "A alterar…" : "Alterar palavra-passe"}</Button>{feedback ? <span role="status" className={`text-sm ${feedback.kind === "success" ? "text-success-400" : "text-error-400"}`}>{feedback.message}</span> : null}</div>
+      </form>
+    </section>
   );
 }
 
@@ -148,8 +200,9 @@ function PersonalitiesPanel({ items, demo, onCreated, onUpdate }: { items: Resou
   );
 }
 
-function SettingsPanel({ demo }: { demo: boolean }) {
-  const [internet, setInternet] = useState(true);
+function SettingsPanel({ demo, browserTools }: { demo: boolean; browserTools?: CapabilityStatus }) {
+  const browserAvailable = browserTools?.available === true;
+  const [internet, setInternet] = useState(false);
   const [compact, setCompact] = useState(false);
   const update = (key: string, value: boolean) => {
     if (!demo) void apiRequest("/profile/preferences", { method: "PATCH", body: JSON.stringify({ [key]: value }) });
@@ -157,13 +210,13 @@ function SettingsPanel({ demo }: { demo: boolean }) {
   return (
     <div className="max-w-xl divide-y divide-gray-800 rounded-2xl border border-gray-800 px-5">
       <div className="py-5"><h3 className="text-sm font-semibold text-white">Memória Growth</h3><p className="mt-1 text-sm leading-5 text-gray-500">O G-Brain é aplicado pelo servidor através da identidade assinada da sessão. O browser não escolhe fontes de memória; G-Cortex é a respetiva camada de visualização.</p></div>
-      <div className="flex items-start justify-between gap-5 py-5"><div><h3 className="text-sm font-semibold text-white">Acesso à internet</h3><p className="mt-1 text-sm leading-5 text-gray-500">Utiliza ferramentas aprovadas e sujeitas a permissões.</p></div><Switch label="" defaultChecked={internet} disabled={demo} onChange={(value) => { setInternet(value); update("internet_enabled", value); }} /></div>
-      <div className="flex items-start justify-between gap-5 py-5"><div><h3 className="text-sm font-semibold text-white">Interface compacta</h3><p className="mt-1 text-sm leading-5 text-gray-500">Reduz o espaçamento da lista de conversas.</p></div><Switch label="" defaultChecked={compact} disabled={demo} onChange={(value) => { setCompact(value); update("compact_ui", value); }} /></div>
+      <div className="flex items-start justify-between gap-5 py-5"><div><h3 className="text-sm font-semibold text-white">Acesso à internet</h3><p className="mt-1 text-sm leading-5 text-gray-500">{browserAvailable ? "Utiliza ferramentas aprovadas e sujeitas a permissões." : `Indisponível neste ambiente — ${browserTools?.reason ?? "runtime de browser não configurado"}`}</p></div><Switch label="" ariaLabel="Acesso à internet" defaultChecked={internet} disabled={demo || !browserAvailable} onChange={(value) => { setInternet(value); update("internet_enabled", value); }} /></div>
+      <div className="flex items-start justify-between gap-5 py-5"><div><h3 className="text-sm font-semibold text-white">Interface compacta</h3><p className="mt-1 text-sm leading-5 text-gray-500">Reduz o espaçamento da lista de conversas.</p></div><Switch label="" ariaLabel="Interface compacta" defaultChecked={compact} disabled={demo} onChange={(value) => { setCompact(value); update("compact_ui", value); }} /></div>
     </div>
   );
 }
 
-export function ResourceCenter({ open, onClose, user, demo }: ResourceCenterProps) {
+export function ResourceCenter({ open, onClose, user, demo, browserTools }: ResourceCenterProps) {
   const [tab, setTab] = useState<ResourceTab>("skills");
   const [items, setItems] = useState<ResourceItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -198,7 +251,7 @@ export function ResourceCenter({ open, onClose, user, demo }: ResourceCenterProp
         </nav>
         <section className="min-h-[440px] overflow-y-auto p-5 sm:p-7">
           <div className="mb-6"><h3 className="text-lg font-semibold text-white">{tabs.find((item) => item.id === tab)?.label}</h3>{demo ? <p className="mt-1 text-xs text-warning-400">Dados de demonstração — sem alterações no servidor.</p> : null}</div>
-          {tab === "profile" ? <ProfilePanel user={user} demo={demo} /> : tab === "settings" ? <SettingsPanel demo={demo} /> : loading ? <div className="grid min-h-48 place-items-center"><span className="size-7 animate-spin rounded-full border-2 border-gray-700 border-t-brand-500" /></div> : error ? <p role="alert" className="rounded-xl border border-error-500/20 bg-error-500/10 px-4 py-3 text-sm text-error-400">{error}</p> : tab === "personalities" ? <PersonalitiesPanel items={items} demo={demo} onCreated={(created) => setItems((current) => [...current, created])} onUpdate={(updated) => setItems((current) => current.map((item) => item.id === updated.id ? updated : item))} /> : <ResourceList tab={tab} items={items} demo={demo} onUpdate={(updated) => setItems((current) => current.map((item) => item.id === updated.id ? updated : item))} />}
+          {tab === "profile" ? <ProfilePanel user={user} demo={demo} /> : tab === "settings" ? <SettingsPanel demo={demo} browserTools={browserTools} /> : loading ? <div className="grid min-h-48 place-items-center"><span className="size-7 animate-spin rounded-full border-2 border-gray-700 border-t-brand-500" /></div> : error ? <p role="alert" className="rounded-xl border border-error-500/20 bg-error-500/10 px-4 py-3 text-sm text-error-400">{error}</p> : tab === "personalities" ? <PersonalitiesPanel items={items} demo={demo} onCreated={(created) => setItems((current) => [...current, created])} onUpdate={(updated) => setItems((current) => current.map((item) => item.id === updated.id ? updated : item))} /> : <ResourceList tab={tab} items={items} demo={demo} onUpdate={(updated) => setItems((current) => current.map((item) => item.id === updated.id ? updated : item))} />}
         </section>
       </div>
     </Modal>

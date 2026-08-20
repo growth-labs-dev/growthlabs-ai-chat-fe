@@ -75,10 +75,10 @@ export function ChatApp() {
         {canRegenerate ? (
           <button type="button" onClick={() => void chat.regenerate()} className="absolute bottom-36 left-1/2 z-10 -translate-x-1/2 rounded-full border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-400 shadow-theme-sm hover:bg-gray-800 hover:text-white">Gerar novamente</button>
         ) : null}
-        <ChatComposer model={chat.model} modelLabels={chat.modelLabels} streaming={chat.streaming} disabled={chat.loading} onModelChange={chat.setModel} onUpload={chat.uploadAttachment} onSend={chat.sendMessage} onStop={chat.stop} />
+        <ChatComposer model={chat.model} modelLabels={chat.modelLabels} streaming={chat.streaming} disabled={chat.loading} uploadCapability={chat.capabilities.uploads} onModelChange={chat.setModel} onUpload={chat.uploadAttachment} onSend={chat.sendMessage} onStop={chat.stop} />
       </main>
 
-      {auth.user ? <ResourceCenter open={resourcesOpen} onClose={() => setResourcesOpen(false)} user={auth.user} demo={auth.demo} /> : null}
+      {auth.user ? <ResourceCenter open={resourcesOpen} onClose={() => setResourcesOpen(false)} user={auth.user} demo={auth.demo} browserTools={chat.capabilities.browserTools} /> : null}
     </div>
   );
 }

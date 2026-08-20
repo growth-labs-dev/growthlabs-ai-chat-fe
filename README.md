@@ -12,7 +12,11 @@ npm run dev
 
 Por omissão, o browser comunica apenas com `/growth-api/v1` no mesmo domínio e envia o cookie de sessão com `credentials: include`. Nenhuma chave de modelo ou credencial administrativa pertence ao frontend.
 
-O login de produção é exclusivamente Google OAuth e só aceita contas provisionadas pelo administrador. O CSRF da sessão fica apenas em memória e é enviado em todas as mutações. O modo de demonstração só existe no servidor Vite e requer `VITE_ENABLE_DEMO=true`; os dados e respostas simulados ficam explicitamente identificados.
+O login de produção apresenta email/palavra-passe e/ou Google OAuth de acordo com `/auth/config`. Quando `password.registration` está ativo, `/register` envia um pedido real e informa que a conta aguarda aprovação; não existe recuperação de palavra-passe simulada. Login e registo são validados como same-origin pelo backend. Depois da autenticação, o CSRF fica apenas em memória e acompanha todas as mutações, incluindo a troca de palavra-passe em Perfil/Segurança.
+
+O frontend não grava utilizadores, sessões, conversas, histórico, perfil ou preferências em `localStorage`, `sessionStorage` ou IndexedDB. A sessão de produção usa exclusivamente cookie opaco `HttpOnly` e persistência do gateway. O modo de demonstração só existe no servidor Vite com `VITE_ENABLE_DEMO=true`, é rotulado e mantém os dados somente em RAM.
+
+Em desktop, `/login` e `/register` apresentam à esquerda o MP4 institucional fornecido pela Growth Labs, sem overlay, gradiente ou tint. O vídeo é decorativo, silencioso e possui fallback preto; em movimento reduzido ou viewport móvel não inicia reprodução.
 
 ## Qualidade
 
@@ -33,6 +37,7 @@ docker run --rm -p 8080:8080 \
 ```
 
 `GET /healthz` valida o Nginx. O prefixo `/growth-api/` é encaminhado sem buffering para preservar SSE.
+O CSP permite media exclusivamente no host CloudFront exato do MP4; o restante JavaScript e todas as ligações de aplicação continuam same-origin.
 
 O contrato esperado do backend está em [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
 

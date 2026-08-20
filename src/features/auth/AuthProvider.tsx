@@ -21,6 +21,8 @@ interface AuthContextValue {
   error: string | null;
   notice: AuthNotice;
   demo: boolean;
+  loginWithPassword: (email: string, password: string) => Promise<void>;
+  registerWithPassword: (data: { firstName: string; lastName: string; email: string; password: string }) => Promise<void>;
   loginWithGoogle: () => void;
   loginDemo: () => void;
   logout: () => Promise<void>;
@@ -118,6 +120,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.assign(loginUrl);
   }, [config]);
 
+  const loginWithPassword = useCallback(async (email: string, password: string) => {
+    if (!config?.password.enabled) {
+      throw new Error("O login por email e palavra-passe não está disponível.");
+    }
+    setError(null);
+    setNotice(null);
+    const session = await apiRequest<AuthSession>(
+      "/auth/password/login",
+      {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim(), password }),
+      },
+      { csrf: "unauthenticated-password-login" },
+    );
+    if (!session.authenticated || !session.user || !session.csrfToken) {
+      setCsrfToken(null);
+      throw new Error("O serviço não devolveu uma sessão válida.");
+    }
+    applySession(session);
+  }, [applySession, config]);
+
+  const registerWithPassword = useCallback(async ({ firstName, lastName, email, password }: { firstName: string; lastName: string; email: string; password: string }) => {
+    if (!config?.password.registration) {
+      throw new Error("O registo de contas não está disponível.");
+    }
+    setError(null);
+    setNotice(null);
+    await apiRequest<{ status: string }>(
+      "/auth/password/register",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          email: email.trim(),
+          password,
+        }),
+      },
+      { csrf: "unauthenticated-password-register" },
+    );
+  }, [config]);
+
   const loginDemo = useCallback(() => {
     if (!isDemoEnabled) return;
     setError(null);
@@ -137,8 +181,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [demo]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, config, loading, error, notice, demo, loginWithGoogle, loginDemo, logout, refresh, clearNotice: () => setNotice(null) }),
-    [user, config, loading, error, notice, demo, loginWithGoogle, loginDemo, logout, refresh],
+    () => ({ user, config, loading, error, notice, demo, loginWithPassword, registerWithPassword, loginWithGoogle, loginDemo, logout, refresh, clearNotice: () => setNotice(null) }),
+    [user, config, loading, error, notice, demo, loginWithPassword, registerWithPassword, loginWithGoogle, loginDemo, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

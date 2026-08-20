@@ -9,7 +9,7 @@ O frontend usa `/growth-api/v1` no mesmo origin. O Nginx incluído encaminha ess
 ```json
 {
   "authentication": true,
-  "registration": false,
+  "password": { "enabled": true, "registration": true },
   "google": { "enabled": true, "loginUrl": "https://.../auth/google/start" },
   "cli": { "enabled": true, "verificationUrl": "https://g-chat.growthlabs.pt/cli/authorize" }
 }
@@ -32,11 +32,17 @@ O frontend usa `/growth-api/v1` no mesmo origin. O Nginx incluído encaminha ess
 }
 ```
 
-Uma sessão anónima devolve `{ "authenticated": false, "user": null, "csrfToken": null }`. O token CSRF permanece apenas em memória; não é escrito em storage, URL ou logs. Todas as mutações feitas pelo frontend, incluindo `POST /chat/completions`, incluem `X-Growth-CSRF` e `credentials: include`.
+Uma sessão anónima devolve `{ "authenticated": false, "user": null, "csrfToken": null }`. O token CSRF permanece apenas em memória; não é escrito em storage, URL ou logs. Todas as mutações autenticadas feitas pelo frontend, incluindo `POST /chat/completions`, incluem `X-Growth-CSRF` e `credentials: include`.
 
-## Google OAuth
+## Email, palavra-passe e Google OAuth
 
-Não existe formulário de registo nem login por email/palavra-passe. `GET /auth/google/start?return_to=...` inicia o OAuth e o servidor só conclui a sessão para emails ativos previamente provisionados.
+Quando `password.enabled` é verdadeiro, `POST /auth/password/login` recebe `{ "email": "...", "password": "..." }` e devolve o mesmo objeto de sessão autenticada, incluindo `csrfToken`.
+
+Quando `password.registration` é verdadeiro, `/register` envia `POST /auth/password/register` com `{ "first_name", "last_name", "email", "password" }`. A palavra-passe tem no mínimo 12 caracteres. O sucesso mantém a conta pendente até aprovação administrativa; não cria uma sessão automaticamente.
+
+Login e registo são as duas mutações que não enviam `X-Growth-CSRF`, porque ainda não existe uma sessão. O backend exige same-origin/`Origin`, rate limiting e erros genéricos para não enumerar contas. O frontend limpa os campos sensíveis e não guarda palavra-passe ou CSRF em storage.
+
+`GET /auth/google/start?return_to=...` inicia o OAuth e o servidor só conclui a sessão para emails ativos previamente provisionados.
 
 O callback regressa à aplicação com:
 
@@ -47,6 +53,10 @@ O callback regressa à aplicação com:
 A aplicação apresenta o resultado e remove imediatamente `auth` do endereço, preservando outros parâmetros legítimos.
 
 `POST /auth/logout` exige cookie e `X-Growth-CSRF`; depois da resposta o frontend elimina o CSRF da memória.
+
+`POST /auth/password/change` recebe `{ "current_password", "new_password" }` no Perfil/Segurança. Exige cookie e `X-Growth-CSRF`; a nova palavra-passe tem no mínimo 12 caracteres e todos os campos são limpos no fim.
+
+Não existe recuperação de palavra-passe ou outra ação simulada na interface. Os métodos apresentados são estritamente os anunciados por `/auth/config`; GitHub permanece visivelmente indisponível enquanto o backend não o oferecer.
 
 ## Login do Growth CLI no browser
 
@@ -63,20 +73,21 @@ Ambas exigem cookie e `X-Growth-CSRF`. O código é removido do endereço depois
 
 O G-Brain é aplicado no servidor de acordo com a identidade assinada da sessão; o browser não envia nem escolhe fontes de memória. G-Cortex é a camada de visualização do conhecimento, não uma fonte selecionável no pedido. Permissões de ferramentas também pertencem ao runtime/backend, nunca ao conteúdo enviado pelo browser.
 
-## Serviços de aplicação ainda necessários
+## Persistência e recursos
 
-O gateway público atual implementa identidade e inferência, mas não persiste as entidades visuais abaixo. O frontend já contém adapters para uma futura API autenticada de aplicação:
+O frontend usa exclusivamente os adapters autenticados do gateway para persistir:
 
 - `/chat/workspace`, `/chat/folders`, `/chat/conversations` e `/chat/attachments`
 - `/skills`, `/plugins`, `/connections`, `/personalities`
 - `/profile` e `/profile/preferences`
 
-Até estes endpoints existirem, a autenticação e o streaming podem ser integrados, mas histórico sincronizado, pastas e gestão de recursos não devem ser declarados operacionais em produção.
+Users, histórico, mensagens, perfil e preferências nunca são escritos em `localStorage`, `sessionStorage` ou IndexedDB. A sessão usa somente o cookie opaco `HttpOnly`, que não é lido por JavaScript, e o CSRF em memória. Mesmo o modo de demonstração DEV mantém os dados apenas em RAM e perde-os ao recarregar.
 
 ## Requisitos de implantação
 
 - `GROWTH_API_UPSTREAM` aponta para o gateway privado, mantendo `/growth-api` no mesmo origin público.
 - O gateway deve usar `GROWTH_CHAT_PUBLIC_URL=https://g-chat.growthlabs.pt` e um `GROWTH_AUTH_PUBLIC_URL` coerente com o callback público; cookies não atravessam domínios diferentes.
 - CSRF, ownership, RBAC, rate limiting e limites de upload continuam obrigatórios no backend.
+- Login e registo por palavra-passe validam `Origin` no servidor antes de criar qualquer estado; todas as mutações autenticadas seguintes exigem CSRF.
 - OAuth usa `state`, PKCE, nonce e allowlist de contas provisionadas.
 - O device flow usa códigos curtos, expirados, de uso único e confirmação explícita.

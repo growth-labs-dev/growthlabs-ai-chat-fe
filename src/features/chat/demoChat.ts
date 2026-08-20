@@ -1,7 +1,5 @@
 import type { ChatAttachment, ChatFolder, ChatMessage, ChatWorkspace, ConversationSummary, GrowthModel } from "./types";
 
-const STORAGE_KEY = "growth-chat-demo-v1";
-
 interface DemoState extends ChatWorkspace {
   messages: Record<string, ChatMessage[]>;
 }
@@ -30,21 +28,22 @@ const initialState: DemoState = {
       },
     ],
   },
+  capabilities: {
+    persistence: { available: false, reason: "A demonstração mantém os dados apenas em memória." },
+    uploads: { available: false, reason: "A demonstração não envia ficheiros." },
+    browserTools: { available: false, reason: "A demonstração não executa ferramentas de internet." },
+  },
 };
 
 const cloneInitialState = (): DemoState => JSON.parse(JSON.stringify(initialState)) as DemoState;
+let inMemoryDemoState = cloneInitialState();
 
 export function readDemoState(): DemoState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as DemoState) : cloneInitialState();
-  } catch {
-    return cloneInitialState();
-  }
+  return structuredClone(inMemoryDemoState);
 }
 
 export function writeDemoState(state: DemoState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  inMemoryDemoState = structuredClone(state);
 }
 
 export function demoCreateFolder(state: DemoState, name: string) {
@@ -74,4 +73,3 @@ export function demoCreateConversation(state: DemoState, model: GrowthModel, fol
 export function demoAttachment(file: File): ChatAttachment {
   return { id: crypto.randomUUID(), name: file.name, size: file.size, mimeType: file.type || "application/octet-stream" };
 }
-

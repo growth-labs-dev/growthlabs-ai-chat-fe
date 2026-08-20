@@ -36,6 +36,19 @@ export interface ChatMessage {
 export interface ChatWorkspace {
   folders: ChatFolder[];
   conversations: ConversationSummary[];
+  capabilities?: WorkspaceCapabilities;
+}
+
+export interface CapabilityStatus {
+  available: boolean;
+  reason?: string;
+  source?: string;
+}
+
+export interface WorkspaceCapabilities {
+  persistence?: CapabilityStatus;
+  uploads?: CapabilityStatus;
+  browserTools?: CapabilityStatus;
 }
 
 export interface StreamChatInput {
@@ -46,4 +59,3 @@ export interface StreamChatInput {
   signal: AbortSignal;
   onDelta: (delta: string) => void;
 }
-

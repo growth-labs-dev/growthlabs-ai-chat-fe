@@ -1,5 +1,6 @@
 import { useAuth } from "./AuthProvider";
 import { LoginPage } from "./LoginPage";
+import { RegisterPage } from "./RegisterPage";
 import { ChatApp } from "../chat/ChatApp";
 
 export function AuthenticatedApplication() {
@@ -16,6 +17,6 @@ export function AuthenticatedApplication() {
     );
   }
 
-  return user ? <ChatApp /> : <LoginPage />;
+  if (user) return <ChatApp />;
+  return window.location.pathname.replace(/\/+$/, "") === "/register" ? <RegisterPage /> : <LoginPage />;
 }
-
