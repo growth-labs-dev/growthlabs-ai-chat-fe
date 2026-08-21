@@ -47,9 +47,74 @@ async function expectNoBrowserDataStorage(page: Page) {
   expect(storage).toEqual({ local: [], session: [], databases: [] });
 }
 
+test("unauthenticated flows default to English and retain Portuguese in the URL only", async ({ page }) => {
+  await mockUnauthenticated(page);
+  await page.goto("/login");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Português" }).click();
+  await expect(page).toHaveURL(/lang=pt/);
+  await expect(page.locator("html")).toHaveAttribute("lang", "pt-PT");
+  await expect(page.getByRole("heading", { name: "Entrar na sua conta" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Entrar na sua conta" })).toBeVisible();
+
+  await page.getByRole("button", { name: "English" }).click();
+  await expect(page).not.toHaveURL(/lang=/);
+  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+  await expectNoBrowserDataStorage(page);
+});
+
+test("English is the default and an authenticated locale preference persists through the backend", async ({ page }) => {
+  let persistedLocale: "en" | "pt" = "en";
+  let preferenceMutations = 0;
+  await page.route("**/growth-api/v1/auth/config", (route) => route.fulfill(json(apiConfig)));
+  await page.route("**/growth-api/v1/auth/session", (route) => route.fulfill(json({ authenticated: true, user, csrfToken: "csrf-test-token" })));
+  await page.route("**/growth-api/v1/profile", (route) => route.fulfill(json({ preferences: { locale: persistedLocale } })));
+  await page.route("**/growth-api/v1/profile/preferences", async (route) => {
+    expectCsrf(route.request());
+    const body = await route.request().postDataJSON() as { locale: "en" | "pt" };
+    expect(["en", "pt"]).toContain(body.locale);
+    persistedLocale = body.locale;
+    preferenceMutations += 1;
+    await route.fulfill(json({ preferences: { locale: persistedLocale } }));
+  });
+  await page.route("**/growth-api/v1/chat/workspace", (route) => route.fulfill(json({ folders: [], conversations: [], capabilities: unavailableCapabilities })));
+  await page.route("**/growth-api/v1/skills", (route) => route.fulfill(json({ items: [], capability: { available: false } })));
+
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("heading", { name: "How can I help?" })).toBeVisible();
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("button", { name: "Profile and settings" }).click();
+  await expect(page.getByRole("heading", { name: "Growth resources" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connections", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Profile", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
+  await expect(page.getByText("No resources are configured for this account.")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Português" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "pt-PT");
+  await expect(page.getByRole("heading", { name: "Como posso ajudar?" })).toBeVisible();
+  expect(preferenceMutations).toBe(1);
+  expect(persistedLocale).toBe("pt");
+  await expectNoBrowserDataStorage(page);
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("lang", "pt-PT");
+  await expect(page.getByRole("heading", { name: "Como posso ajudar?" })).toBeVisible();
+  await page.getByRole("button", { name: "English" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("heading", { name: "How can I help?" })).toBeVisible();
+  expect(preferenceMutations).toBe(2);
+  await expectNoBrowserDataStorage(page);
+});
+
 test("login offers password, Google and registration while preserving OAuth and CLI state", async ({ page }) => {
   await mockUnauthenticated(page);
-  await page.goto("/?auth=not-authorized&user_code=ABCD-EFGH");
+  await page.goto("/?lang=pt&auth=not-authorized&user_code=ABCD-EFGH");
 
   await expect(page).toHaveTitle(/Growth AI/);
   await expect(page.getByRole("heading", { name: "Entrar na sua conta" })).toBeVisible();
@@ -67,7 +132,7 @@ test("login offers password, Google and registration while preserving OAuth and 
   await expect(page).toHaveURL(/user_code=ABCD-EFGH/);
   await expect(page).not.toHaveURL(/auth=/);
 
-  await page.goto("/login?auth=failed");
+  await page.goto("/login?lang=pt&auth=failed");
   await expect(page.getByText("O login Google falhou ou expirou")).toBeVisible();
   await expect(page).not.toHaveURL(/auth=/);
 });
@@ -88,7 +153,7 @@ test("password login omits CSRF before session and keeps returned CSRF only in m
     await route.fulfill(json({ authenticated: false }));
   });
 
-  await page.goto("/login");
+  await page.goto("/login?lang=pt");
   await page.getByLabel("Email").fill("user@growthlabs.pt");
   await page.getByLabel("Palavra-passe", { exact: true }).fill("segredo-de-teste");
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
@@ -116,7 +181,7 @@ test("registration submits the exact contract without CSRF and reports pending a
     await route.fulfill(json({ status: "pending" }));
   });
 
-  await page.goto("/register");
+  await page.goto("/register?lang=pt");
   await expect(page.getByRole("heading", { name: "Dados da conta" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Google", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "GitHub indisponível" })).toBeDisabled();
@@ -138,7 +203,7 @@ test("registration submits the exact contract without CSRF and reports pending a
 
 test("desktop auth keeps the exact MP4 hero on the left with a matte fallback", async ({ page }) => {
   await mockUnauthenticated(page);
-  await page.goto("/register");
+  await page.goto("/register?lang=pt");
 
   const panel = page.getByTestId("auth-video-panel");
   const video = panel.locator("video");
@@ -165,7 +230,7 @@ test("auth video does not autoplay or fetch when reduced motion is requested", a
   await page.route("https://d8j0ntlcm91z4.cloudfront.net/**", (route) => { mediaRequests += 1; return route.abort(); });
   await page.route("**/growth-api/v1/auth/config", (route) => route.fulfill(json(apiConfig)));
   await page.route("**/growth-api/v1/auth/session", (route) => route.fulfill(json({ authenticated: false, user: null, csrfToken: null })));
-  await page.goto("/login");
+  await page.goto("/login?lang=pt");
 
   await expect(page.getByTestId("auth-video-panel")).toHaveAttribute("data-video-state", "reduced-motion");
   await expect(page.getByTestId("auth-video-panel").locator("video")).not.toHaveAttribute("autoplay", "");
@@ -178,7 +243,7 @@ test("registration is responsive and does not fetch the hidden video on mobile",
   await page.route("https://d8j0ntlcm91z4.cloudfront.net/**", (route) => { mediaRequests += 1; return route.abort(); });
   await page.route("**/growth-api/v1/auth/config", (route) => route.fulfill(json(apiConfig)));
   await page.route("**/growth-api/v1/auth/session", (route) => route.fulfill(json({ authenticated: false, user: null, csrfToken: null })));
-  await page.goto("/register");
+  await page.goto("/register?lang=pt");
 
   await expect(page.getByRole("heading", { name: "Dados da conta" })).toBeVisible();
   await expect(page.getByTestId("auth-video-panel")).toBeHidden();
@@ -219,7 +284,7 @@ test("authenticated flow sends in-memory CSRF on CLI approval, streaming and log
     await route.fulfill(json({ authenticated: false }));
   });
 
-  await page.goto("/?auth=success&user_code=ABCD-EFGH");
+  await page.goto("/?lang=pt&auth=success&user_code=ABCD-EFGH");
   await expect(page.getByRole("heading", { name: "Projeto Growth" })).toBeVisible();
   await expect(page.getByText("Sessão iniciada com sucesso.")).toBeVisible();
   await page.getByRole("button", { name: "Autorizar" }).click();
@@ -246,7 +311,7 @@ test("profile security rotates a temporary password with session CSRF and clears
     await route.fulfill(json({ status: "changed" }));
   });
 
-  await page.goto("/");
+  await page.goto("/?lang=pt");
   await page.getByRole("button", { name: "Menu da conta" }).click();
   await page.getByRole("button", { name: "Perfil e configurações" }).click();
   await page.getByRole("button", { name: "Perfil", exact: true }).click();
@@ -260,7 +325,7 @@ test("profile security rotates a temporary password with session CSRF and clears
   await expect(page.getByLabel("Nova palavra-passe", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("Confirmar nova palavra-passe")).toHaveValue("");
   await page.getByRole("button", { name: "Configurações", exact: true }).click();
-  await expect(page.getByText(/Indisponível neste ambiente.*sandboxed browser tool runtime/)).toBeVisible();
+  await expect(page.getByText("Indisponível neste ambiente — runtime de browser não configurado.")).toBeVisible();
   await expect(page.getByRole("switch", { name: "Acesso à internet" })).toBeDisabled();
   await expectNoBrowserDataStorage(page);
 });
@@ -279,7 +344,7 @@ test("CLI denial exposes the gateway nested error and preserves the code for ret
     });
   });
 
-  await page.goto("/?user_code=EXPIRED-1");
+  await page.goto("/?lang=pt&user_code=EXPIRED-1");
   await page.getByRole("button", { name: "Recusar" }).click();
   await expect(page.getByText("O código expirou.")).toBeVisible();
   await expect(page).toHaveURL(/user_code=EXPIRED-1/);
@@ -290,7 +355,7 @@ test("authenticated shell remains usable at a mobile viewport", async ({ page })
   await page.route("**/growth-api/v1/auth/config", (route) => route.fulfill(json(apiConfig)));
   await page.route("**/growth-api/v1/auth/session", (route) => route.fulfill(json({ authenticated: true, user, csrfToken: "csrf-test-token" })));
   await page.route("**/growth-api/v1/chat/workspace", (route) => route.fulfill(json({ folders: [], conversations: [] })));
-  await page.goto("/");
+  await page.goto("/?lang=pt");
   await expect(page.getByRole("button", { name: "Abrir menu" })).toBeVisible();
   await expect(page.getByLabel("Mensagem")).toBeVisible();
   await page.getByRole("button", { name: "Abrir menu" }).click();

@@ -1,6 +1,7 @@
 import { useState, type ComponentType, type InputHTMLAttributes, type ReactNode, type SVGProps } from "react";
 import { Check, Eye, EyeOff } from "lucide-react";
 import Label from "../../components/form/Label";
+import { useLocale } from "../i18n/LocaleProvider";
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -13,6 +14,7 @@ interface InputGroupProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export function InputGroup({ label, icon: Icon, hint, invalid = false, passwordToggle = false, id, type, className = "", ...inputProps }: InputGroupProps) {
+  const { locale } = useLocale();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const resolvedType = passwordToggle && type === "password" && passwordVisible ? "text" : type;
   return (
@@ -29,7 +31,7 @@ export function InputGroup({ label, icon: Icon, hint, invalid = false, passwordT
           className={`h-12 w-full rounded-xl border bg-gray-900 py-3 pl-11 ${passwordToggle ? "pr-11" : "pr-4"} text-sm text-white shadow-theme-xs outline-none transition placeholder:text-gray-500 ${invalid ? "border-error-500 focus:border-error-400 focus:ring-3 focus:ring-error-500/15" : "border-gray-700 hover:border-gray-600 focus:border-gray-400 focus:ring-3 focus:ring-white/10"} ${className}`}
         />
         {passwordToggle ? (
-          <button type="button" onClick={() => setPasswordVisible((visible) => !visible)} aria-label={`${passwordVisible ? "Ocultar" : "Mostrar"} ${label.toLowerCase()}`} className="absolute right-3 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-gray-500 transition hover:bg-white/5 hover:text-white">
+          <button type="button" onClick={() => setPasswordVisible((visible) => !visible)} aria-label={`${passwordVisible ? (locale === "pt" ? "Ocultar" : "Hide") : (locale === "pt" ? "Mostrar" : "Show")} ${label.toLowerCase()}`} className="absolute right-3 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-gray-500 transition hover:bg-white/5 hover:text-white">
             {passwordVisible ? <EyeOff aria-hidden="true" className="size-[18px]" /> : <Eye aria-hidden="true" className="size-[18px]" />}
           </button>
         ) : null}

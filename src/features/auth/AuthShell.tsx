@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
+import { useLocale } from "../i18n/LocaleProvider";
 
 const AUTH_VIDEO_URL = "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260506_081238_406ed0e3-5d83-436e-a512-0bbff7ec5b95.mp4";
 
@@ -12,6 +13,7 @@ interface AuthShellProps {
 }
 
 export function AuthShell({ eyebrow, title, description, children, steps }: AuthShellProps) {
+  const { locale } = useLocale();
   const reducedMotion = useReducedMotion();
   const [largeViewport, setLargeViewport] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
   const [videoFailed, setVideoFailed] = useState(false);
@@ -30,7 +32,7 @@ export function AuthShell({ eyebrow, title, description, children, steps }: Auth
         className="relative hidden h-full w-[52%] flex-col items-center justify-end overflow-hidden rounded-3xl bg-gray-950 px-12 pb-32 shadow-2xl lg:flex"
         data-testid="auth-video-panel"
         data-video-state={reducedMotion ? "reduced-motion" : videoFailed ? "error" : shouldPlay ? "playing" : "inactive"}
-        aria-label="Apresentação visual Growth Labs"
+        aria-label={locale === "pt" ? "Apresentação visual Growth Labs" : "Growth Labs visual presentation"}
       >
         <video
           autoPlay={shouldPlay}
@@ -66,13 +68,13 @@ export function AuthShell({ eyebrow, title, description, children, steps }: Auth
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
             className="mx-auto flex w-full max-w-lg flex-col"
           >
-            <a href="/login" aria-label="Growth Labs — início de sessão" className="w-fit lg:hidden">
+            <a href="/login" aria-label={locale === "pt" ? "Growth Labs — início de sessão" : "Growth Labs — sign in"} className="w-fit lg:hidden">
               <img src="/Logo-Vertical-White.svg" alt="Growth Labs" className="h-20 w-fit object-contain" />
             </a>
             <div className="my-auto py-10">
               {children}
             </div>
-            <p className="text-theme-xs text-gray-500">Growth Labs · Ambiente de IA protegido</p>
+            <p className="text-theme-xs text-gray-500">Growth Labs · {locale === "pt" ? "Ambiente de IA protegido" : "Secure AI environment"}</p>
           </motion.div>
       </section>
     </main>

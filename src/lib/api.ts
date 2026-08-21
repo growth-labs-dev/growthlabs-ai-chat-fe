@@ -42,17 +42,18 @@ export async function apiRequest<T>(
   const isMutation = !new Set(["GET", "HEAD", "OPTIONS"]).has(method);
   const isPasswordLogin = options.csrf === "unauthenticated-password-login";
   const isPasswordRegistration = options.csrf === "unauthenticated-password-register";
+  const portuguese = document.documentElement.lang.startsWith("pt");
 
   if (isPasswordLogin && (method !== "POST" || path !== "/auth/password/login")) {
-    throw new ApiError("A exceção CSRF só pode ser usada no login por palavra-passe.", 500);
+    throw new ApiError(portuguese ? "A exceção CSRF só pode ser usada no login por palavra-passe." : "The CSRF exception can only be used for password sign-in.", 500);
   }
   if (isPasswordRegistration && (method !== "POST" || path !== "/auth/password/register")) {
-    throw new ApiError("A exceção CSRF só pode ser usada no registo por palavra-passe.", 500);
+    throw new ApiError(portuguese ? "A exceção CSRF só pode ser usada no registo por palavra-passe." : "The CSRF exception can only be used for password registration.", 500);
   }
 
   if (isMutation && !isPasswordLogin && !isPasswordRegistration) {
     const csrfToken = getCsrfToken();
-    if (!csrfToken) throw new ApiError("A sessão não possui um token CSRF válido.", 403);
+    if (!csrfToken) throw new ApiError(portuguese ? "A sessão não possui um token CSRF válido." : "The session does not have a valid CSRF token.", 403);
     headers.set("X-Growth-CSRF", csrfToken);
   }
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
@@ -75,7 +76,7 @@ export async function apiRequest<T>(
       (typeof nestedError?.message === "string" && nestedError.message) ||
       (typeof record?.message === "string" && record.message) ||
       (typeof record?.error === "string" && record.error) ||
-      `Pedido recusado (${response.status})`;
+      (portuguese ? `Pedido recusado (${response.status})` : `Request rejected (${response.status})`);
     throw new ApiError(message, response.status, body);
   }
   return body as T;

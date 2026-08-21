@@ -59,8 +59,9 @@ function extractText(record: StreamRecord): string {
 }
 
 export async function streamChat(input: StreamChatInput) {
+  const portuguese = document.documentElement.lang.startsWith("pt");
   const csrfToken = getCsrfToken();
-  if (!csrfToken) throw new Error("A sessão não possui um token CSRF válido.");
+  if (!csrfToken) throw new Error(portuguese ? "A sessão não possui um token CSRF válido." : "The session does not have a valid CSRF token.");
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: "POST",
     credentials: "include",
@@ -77,7 +78,7 @@ export async function streamChat(input: StreamChatInput) {
 
   if (!response.ok || !response.body) {
     const message = await response.text();
-    throw new Error(message || `A resposta foi recusada (${response.status}).`);
+    throw new Error(message || (portuguese ? `A resposta foi recusada (${response.status}).` : `The response was rejected (${response.status}).`));
   }
 
   const reader = response.body.getReader();

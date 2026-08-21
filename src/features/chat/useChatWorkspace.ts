@@ -3,6 +3,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { chatApi, streamChat } from "./chatApi";
 import { demoAttachment, demoCreateConversation, demoCreateFolder, readDemoState, writeDemoState } from "./demoChat";
 import type { ChatAttachment, ChatFolder, ChatMessage, ConversationSummary, GrowthModel, WorkspaceCapabilities } from "./types";
+import { useLocale } from "../i18n/LocaleProvider";
 
 const modelLabels: Record<GrowthModel, string> = {
   "growth-low": "Growth Low",
@@ -12,6 +13,12 @@ const modelLabels: Record<GrowthModel, string> = {
 
 export function useChatWorkspace() {
   const { demo } = useAuth();
+  const { locale } = useLocale();
+  const copy = locale === "pt" ? {
+    uploads: "O backend não anunciou processamento seguro de ficheiros.", browser: "O backend não anunciou ferramentas de internet.", load: "Não foi possível carregar as conversas.", open: "Não foi possível abrir esta conversa.", demo: "Resposta simulada no modo de demonstração local. Ligue o backend Growth para conversar com os modelos e usar memória, Skills, Plugins e Conexões reais.", interrupted: "A resposta foi interrompida por um erro.", conversation: "Nova conversa", title: "A conversa foi iniciada, mas o título não pôde ser atualizado.",
+  } : {
+    uploads: "The backend did not announce secure file processing.", browser: "The backend did not announce internet tools.", load: "Unable to load conversations.", open: "Unable to open this conversation.", demo: "Simulated response in local demo mode. Connect the Growth backend to use real models, memory, Skills, Plugins, and Connections.", interrupted: "The response was interrupted by an error.", conversation: "New conversation", title: "The conversation started, but its title could not be updated.",
+  };
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -21,8 +28,8 @@ export function useChatWorkspace() {
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [capabilities, setCapabilities] = useState<WorkspaceCapabilities>({
-    uploads: { available: false, reason: "O backend não anunciou processamento seguro de ficheiros." },
-    browserTools: { available: false, reason: "O backend não anunciou ferramentas de internet." },
+    uploads: { available: false, reason: copy.uploads },
+    browserTools: { available: false, reason: copy.browser },
   });
   const abortRef = useRef<AbortController | null>(null);
 
@@ -32,25 +39,25 @@ export function useChatWorkspace() {
       setLoading(true);
       setError(null);
       try {
-        const workspace = demo ? readDemoState() : await chatApi.getWorkspace();
+        const workspace = demo ? readDemoState(locale) : await chatApi.getWorkspace();
         if (!active) return;
         setFolders(workspace.folders);
         setConversations(workspace.conversations);
         setCapabilities(workspace.capabilities ?? {
-          uploads: { available: false, reason: "O backend não anunciou processamento seguro de ficheiros." },
-          browserTools: { available: false, reason: "O backend não anunciou ferramentas de internet." },
+          uploads: { available: false, reason: copy.uploads },
+          browserTools: { available: false, reason: copy.browser },
         });
         const first = workspace.conversations[0];
         if (first) {
           setSelectedId(first.id);
           setModel(first.model);
           const loadedMessages = demo
-            ? readDemoState().messages[first.id] ?? []
+            ? readDemoState(locale).messages[first.id] ?? []
             : (await chatApi.getMessages(first.id)).messages;
           if (active) setMessages(loadedMessages);
         }
       } catch (requestError) {
-        if (active) setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar as conversas.");
+        if (active) setError(requestError instanceof Error ? requestError.message : copy.load);
       } finally {
         if (active) setLoading(false);
       }
@@ -60,7 +67,7 @@ export function useChatWorkspace() {
       active = false;
       abortRef.current?.abort();
     };
-  }, [demo]);
+  }, [copy.browser, copy.load, copy.uploads, demo, locale]);
 
   const selectConversation = useCallback(async (conversation: ConversationSummary) => {
     setSelectedId(conversation.id);
@@ -69,75 +76,75 @@ export function useChatWorkspace() {
     setError(null);
     try {
       const nextMessages = demo
-        ? readDemoState().messages[conversation.id] ?? []
+        ? readDemoState(locale).messages[conversation.id] ?? []
         : (await chatApi.getMessages(conversation.id)).messages;
       setMessages(nextMessages);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível abrir esta conversa.");
+      setError(requestError instanceof Error ? requestError.message : copy.open);
     } finally {
       setLoading(false);
     }
-  }, [demo]);
+  }, [copy.open, demo, locale]);
 
   const createConversation = useCallback(async (folderId: string | null = null) => {
     const conversation = demo
-      ? demoCreateConversation(readDemoState(), model, folderId).conversation
+      ? demoCreateConversation(readDemoState(locale), model, folderId, locale).conversation
       : await chatApi.createConversation(model, folderId);
     setConversations((current) => [conversation, ...current]);
     setSelectedId(conversation.id);
     setMessages([]);
     return conversation;
-  }, [demo, model]);
+  }, [demo, locale, model]);
 
   const createFolder = useCallback(async (name: string) => {
     const cleanName = name.trim();
     if (!cleanName) return;
     const folder = demo
-      ? demoCreateFolder(readDemoState(), cleanName).folder
+      ? demoCreateFolder(readDemoState(locale), cleanName, locale).folder
       : await chatApi.createFolder(cleanName);
     setFolders((current) => [...current, folder]);
-  }, [demo]);
+  }, [demo, locale]);
 
   const renameFolder = useCallback(async (folderId: string, name: string) => {
     const cleanName = name.trim();
     if (!cleanName) return;
     if (demo) {
-      const state = readDemoState();
-      writeDemoState({ ...state, folders: state.folders.map((folder) => folder.id === folderId ? { ...folder, name: cleanName } : folder) });
+      const state = readDemoState(locale);
+      writeDemoState({ ...state, folders: state.folders.map((folder) => folder.id === folderId ? { ...folder, name: cleanName } : folder) }, locale);
     } else {
       await chatApi.renameFolder(folderId, cleanName);
     }
     setFolders((current) => current.map((folder) => folder.id === folderId ? { ...folder, name: cleanName } : folder));
-  }, [demo]);
+  }, [demo, locale]);
 
   const renameConversation = useCallback(async (conversationId: string, title: string) => {
     const cleanTitle = title.trim();
     if (!cleanTitle) return;
     if (demo) {
-      const state = readDemoState();
-      writeDemoState({ ...state, conversations: state.conversations.map((item) => item.id === conversationId ? { ...item, title: cleanTitle } : item) });
+      const state = readDemoState(locale);
+      writeDemoState({ ...state, conversations: state.conversations.map((item) => item.id === conversationId ? { ...item, title: cleanTitle } : item) }, locale);
     } else {
       await chatApi.renameConversation(conversationId, cleanTitle);
     }
     setConversations((current) => current.map((item) => item.id === conversationId ? { ...item, title: cleanTitle } : item));
-  }, [demo]);
+  }, [demo, locale]);
 
   const moveConversation = useCallback(async (conversationId: string, folderId: string | null) => {
     if (demo) {
-      const state = readDemoState();
-      writeDemoState({ ...state, conversations: state.conversations.map((item) => item.id === conversationId ? { ...item, folderId } : item) });
+      const state = readDemoState(locale);
+      writeDemoState({ ...state, conversations: state.conversations.map((item) => item.id === conversationId ? { ...item, folderId } : item) }, locale);
     } else {
       await chatApi.moveConversation(conversationId, folderId);
     }
     setConversations((current) => current.map((item) => item.id === conversationId ? { ...item, folderId } : item));
-  }, [demo]);
+  }, [demo, locale]);
 
   const deleteConversation = useCallback(async (conversationId: string) => {
     if (demo) {
-      const state = readDemoState();
+      const state = readDemoState(locale);
       const nextMessages = { ...state.messages };
       delete nextMessages[conversationId];
-      writeDemoState({ ...state, conversations: state.conversations.filter((item) => item.id !== conversationId), messages: nextMessages });
+      writeDemoState({ ...state, conversations: state.conversations.filter((item) => item.id !== conversationId), messages: nextMessages }, locale);
     } else {
       await chatApi.deleteConversation(conversationId);
     }
@@ -146,7 +153,7 @@ export function useChatWorkspace() {
       setSelectedId(null);
       setMessages([]);
     }
-  }, [demo, selectedId]);
+  }, [demo, locale, selectedId]);
 
   const uploadAttachment = useCallback(async (file: File) => demo ? demoAttachment(file) : chatApi.uploadAttachment(file), [demo]);
 
@@ -166,7 +173,7 @@ export function useChatWorkspace() {
 
     try {
       if (demo) {
-        const demoText = "Resposta simulada no modo de demonstração local. Ligue o backend Growth para conversar com os modelos e usar memória, Skills, Plugins e Conexões reais.";
+        const demoText = copy.demo;
         for (const word of demoText.split(" ")) {
           if (controller.signal.aborted) break;
           onDelta(`${word} `);
@@ -185,8 +192,8 @@ export function useChatWorkspace() {
       setMessages((current) => {
         const finalized = current.map((message) => message.id === assistantId ? { ...message, pending: false } : message);
         if (demo) {
-          const state = readDemoState();
-          writeDemoState({ ...state, messages: { ...state.messages, [conversationId]: finalized } });
+          const state = readDemoState(locale);
+          writeDemoState({ ...state, messages: { ...state.messages, [conversationId]: finalized } }, locale);
         }
         return finalized;
       });
@@ -194,14 +201,14 @@ export function useChatWorkspace() {
       if (controller.signal.aborted) {
         setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, pending: false } : message));
       } else {
-        setError(requestError instanceof Error ? requestError.message : "A resposta foi interrompida por um erro.");
+        setError(requestError instanceof Error ? requestError.message : copy.interrupted);
         setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, pending: false, error: true } : message));
       }
     } finally {
       abortRef.current = null;
       setStreaming(false);
     }
-  }, [demo, model]);
+  }, [copy.demo, copy.interrupted, demo, locale, model]);
 
   const sendMessage = useCallback(async (content: string, attachments: ChatAttachment[]) => {
     let conversationId = selectedId;
@@ -217,15 +224,15 @@ export function useChatWorkspace() {
     setMessages(nextMessages);
 
     if (messages.length === 0) {
-      const title = content.trim().slice(0, 54) || "Nova conversa";
+      const title = content.trim().slice(0, 54) || copy.conversation;
       try {
         await renameConversation(conversationId, title);
       } catch {
-        setError("A conversa foi iniciada, mas o título não pôde ser atualizado.");
+        setError(copy.title);
       }
     }
     await runCompletion(conversationId, nextMessages, attachments);
-  }, [createConversation, messages, renameConversation, runCompletion, selectedId]);
+  }, [copy.conversation, copy.title, createConversation, messages, renameConversation, runCompletion, selectedId]);
 
   const regenerate = useCallback(async () => {
     if (streaming || !selectedId) return;

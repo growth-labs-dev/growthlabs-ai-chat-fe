@@ -11,8 +11,27 @@ import {
 import { apiRequest, isDemoEnabled } from "../../lib/api";
 import { setCsrfToken } from "../../lib/csrf";
 import type { AuthConfig, AuthSession, AuthUser } from "./types";
+import type { Locale } from "../i18n/LocaleProvider";
 
 type AuthNotice = { kind: "success" | "error"; message: string } | null;
+
+const localizedMessages: Array<{ values: [string, string]; en: string; pt: string }> = [
+  { values: ["Sessão iniciada com sucesso.", "Session started successfully."], en: "Session started successfully.", pt: "Sessão iniciada com sucesso." },
+  { values: ["Esta conta Google não está autorizada a usar o Growth AI.", "This Google account is not authorized to use Growth AI."], en: "This Google account is not authorized to use Growth AI.", pt: "Esta conta Google não está autorizada a usar o Growth AI." },
+  { values: ["O login Google falhou ou expirou. Tente novamente.", "Google sign-in failed or expired. Try again."], en: "Google sign-in failed or expired. Try again.", pt: "O login Google falhou ou expirou. Tente novamente." },
+  { values: ["O login foi concluído, mas a sessão não ficou ativa. Tente novamente.", "Sign-in completed, but the session is not active. Try again."], en: "Sign-in completed, but the session is not active. Try again.", pt: "O login foi concluído, mas a sessão não ficou ativa. Tente novamente." },
+  { values: ["Não foi possível ligar ao serviço de autenticação Growth.", "Unable to connect to the Growth authentication service."], en: "Unable to connect to the Growth authentication service.", pt: "Não foi possível ligar ao serviço de autenticação Growth." },
+  { values: ["O login Google ainda não está disponível.", "Google sign-in is not available yet."], en: "Google sign-in is not available yet.", pt: "O login Google ainda não está disponível." },
+  { values: ["O serviço devolveu um endereço de login inseguro.", "The service returned an insecure sign-in address."], en: "The service returned an insecure sign-in address.", pt: "O serviço devolveu um endereço de login inseguro." },
+  { values: ["O login por email e palavra-passe não está disponível.", "Email and password sign-in is not available."], en: "Email and password sign-in is not available.", pt: "O login por email e palavra-passe não está disponível." },
+  { values: ["O serviço não devolveu uma sessão válida.", "The service did not return a valid session."], en: "The service did not return a valid session.", pt: "O serviço não devolveu uma sessão válida." },
+  { values: ["O registo de contas não está disponível.", "Account registration is not available."], en: "Account registration is not available.", pt: "O registo de contas não está disponível." },
+];
+
+export function localizeAuthMessage(message: string, locale: Locale) {
+  const match = localizedMessages.find((entry) => entry.values.includes(message));
+  return match ? match[locale] : message;
+}
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -32,14 +51,14 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const demoUser: AuthUser = {
+const demoUser = (): AuthUser => ({
   id: "demo-user",
-  displayName: "Utilizador de demonstração",
+  displayName: document.documentElement.lang.startsWith("pt") ? "Utilizador de demonstração" : "Demo user",
   email: "demo@growthlabs.pt",
   avatarUrl: null,
   role: "demo",
   status: "active",
-};
+});
 
 function consumeAuthResult(): AuthNotice {
   const url = new URL(window.location.href);
@@ -167,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     setCsrfToken("demo-only");
     setDemo(true);
-    setUser(demoUser);
+    setUser(demoUser());
   }, []);
 
   const logout = useCallback(async () => {
@@ -190,6 +209,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth deve ser usado dentro de AuthProvider");
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 }
