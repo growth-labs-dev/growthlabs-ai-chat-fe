@@ -1,0 +1,74 @@
+name: TimBot QA
+run-name: TimBot QA ${{ inputs.run_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      run_id: {required: true, type: string}
+      head_sha: {required: true, type: string}
+      base_sha: {required: true, type: string}
+      profile: {required: true, type: string}
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Execute TimBot QA
+        env:
+          QA_RUN: ${{ inputs.run_id }}
+          QA_HEAD: ${{ inputs.head_sha }}
+          QA_BASE: ${{ inputs.base_sha }}
+          QA_PROFILE: ${{ inputs.profile }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, pathlib, subprocess, urllib.request
+          source = urllib.request.urlopen("https://timbot-api.growthlabs.pt/v1/qa/runner/e468085054c1219a3b2b9f6ebc9918904fcdbebe0a11490170c530b1d1e6e709.py", timeout=30).read(1000000)
+          assert hashlib.sha256(source).hexdigest() == "e468085054c1219a3b2b9f6ebc9918904fcdbebe0a11490170c530b1d1e6e709"
+          target = pathlib.Path('/tmp/timbot-qa-runner.py')
+          target.write_bytes(source)
+          subprocess.run(['python3', str(target), '--run-id', os.environ['QA_RUN'], '--head-sha', os.environ['QA_HEAD'], '--base-sha', os.environ['QA_BASE'], '--profile', os.environ['QA_PROFILE'], '--output', '/tmp/timbot-qa-report.json'], check=True)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: timbot-qa-report
+          path: /tmp/timbot-qa-report.json
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    needs: test
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: timbot-qa-report
+          path: /tmp/qa-artifact
+      - name: Send evidence to TimBot
+        env:
+          QA_RUN: ${{ inputs.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, urllib.parse, urllib.request
+          path = pathlib.Path('/tmp/qa-artifact/timbot-qa-report.json')
+          assert path.is_file() and not path.is_symlink() and path.stat().st_size <= 400000
+          report = json.loads(path.read_bytes())
+          assert report['run_id'] == os.environ['QA_RUN']
+          url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'] + '&audience=' + urllib.parse.quote('timbot-qa:' + os.environ['QA_RUN'])
+          req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+          token = json.load(urllib.request.urlopen(req, timeout=30))['value']
+          req = urllib.request.Request("https://timbot-api.growthlabs.pt/v1/qa/reports", data=json.dumps(report).encode(), headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+          with urllib.request.urlopen(req, timeout=60) as response:
+              assert response.status == 202
+          PY
